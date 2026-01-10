@@ -1,0 +1,48 @@
+<!DOCTYPE html>
+<html>
+<head>
+  <meta charset="UTF-8">
+  <title>Receipt OCR</title>
+</head>
+<body>
+  <h2>Receipt Video → CSV</h2>
+  <input type="file" id="video" accept="video/*">
+  <button onclick="uploadVideo()">Process</button>
+  <p id="result"></p>
+
+  <script>
+    async function uploadVideo() {
+      const videoInput = document.getElementById("video");
+      const resultEl = document.getElementById("result");
+
+      if (!videoInput.files.length) {
+        alert("Select a video first.");
+        return;
+      }
+
+      const file = videoInput.files[0];
+      const formData = new FormData();
+      formData.append("video", file);
+
+      resultEl.innerText = "Processing... This may take a while.";
+
+      try {
+        const CLOUD_RUN_URL = "https://YOUR_CLOUD_RUN_URL"; // Replace with Cloud Run URL
+
+        const response = await fetch(`${CLOUD_RUN_URL}/process`, {
+          method: "POST",
+          body: formData
+        });
+
+        const data = await response.json();
+
+        resultEl.innerHTML = `<a href="${CLOUD_RUN_URL}${data.csv_url}" target="_blank">Download CSV</a>`;
+
+      } catch (err) {
+        console.error(err);
+        resultEl.innerText = "Error processing video.";
+      }
+    }
+  </script>
+</body>
+</html>
