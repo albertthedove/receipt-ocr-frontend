@@ -27,7 +27,7 @@
       resultEl.innerText = "Processing... This may take a while.";
 
       try {
-        const CLOUD_RUN_URL = "https://YOUR_CLOUD_RUN_URL"; // Replace with Cloud Run URL
+        const CLOUD_RUN_URL = "https://receipt-api-107335377039.europe-west1.run.app"; // Replace with Cloud Run URL
 
         const response = await fetch(`${CLOUD_RUN_URL}/process`, {
           method: "POST",
