@@ -2,45 +2,116 @@
 <html>
 <head>
   <meta charset="UTF-8">
-  <title>Receipt OCR</title>
+  <title>Receipt OCR → Items Table + CSV</title>
+  <style>
+    body { font-family: Arial; max-width: 800px; margin: 50px auto; }
+    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
+    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    th { background: #f4f4f4; }
+    #progress { width: 100%; height: 20px; background: #eee; }
+    #progress-bar { height: 100%; background: #4caf50; width: 0%; transition: width 0.3s; }
+    button { padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; }
+    button:disabled { background: #ccc; cursor: not-allowed; }
+  </style>
 </head>
 <body>
-  <h2>Receipt Video → CSV</h2>
+  <h2>Receipt Video → Items Table + CSV Download</h2>
   <input type="file" id="video" accept="video/*">
-  <button onclick="uploadVideo()">Process</button>
-  <p id="result"></p>
+  <button id="processBtn" onclick="uploadVideo()">Process Video</button>
+  <div id="progress-container" style="display:none;">
+    <div>Upload Progress: <span id="progress-text">0%</span></div>
+    <div id="progress"><div id="progress-bar"></div></div>
+  </div>
+  <pre id="status">Select video and click Process</pre>
+  <div id="table-container" style="display:none;"></div>
 
   <script>
     async function uploadVideo() {
       const videoInput = document.getElementById("video");
-      const resultEl = document.getElementById("result");
+      const processBtn = document.getElementById("processBtn");
+      const statusEl = document.getElementById("status");
+      const progressContainer = document.getElementById("progress-container");
+      const progressBar = document.getElementById("progress-bar");
+      const progressText = document.getElementById("progress-text");
+      const tableContainer = document.getElementById("table-container");
 
       if (!videoInput.files.length) {
-        alert("Select a video first.");
+        alert("Select a video first (max 60s).");
         return;
       }
 
       const file = videoInput.files[0];
       const formData = new FormData();
-      formData.append("video", file);
+      formData.append("file", file);  // Fixed: "file" not "video"
 
-      resultEl.innerText = "Processing... This may take a while.";
+      // UI updates
+      processBtn.disabled = true;
+      processBtn.textContent = "Processing...";
+      progressContainer.style.display = "block";
+      statusEl.textContent = "Uploading video...";
+      tableContainer.style.display = "none";
 
       try {
-        const CLOUD_RUN_URL = "https://receipt-parser-api-107335377039.europe-west1.run.app"; // Replace with Cloud Run URL
-
+        const CLOUD_RUN_URL = "https://receipt-parser-api-107335377039.europe-west1.run.app";
         const response = await fetch(`${CLOUD_RUN_URL}/parse-receipt`, {
           method: "POST",
           body: formData
         });
 
-        const data = await response.json();
+        // Update upload progress (upload complete when response starts)
+        progressBar.style.width = "100%";
+        progressText.textContent = "100% - Processing with AI...";
 
-        resultEl.innerHTML = `<a href="${CLOUD_RUN_URL}${data.csv_url}" target="_blank">Download CSV</a>`;
+        if (!response.ok) {
+          const err = await response.json();
+          throw new Error(err.detail || `HTTP ${response.status}`);
+        }
+
+        const items = await response.json();
+        if (!items || items.length === 0) {
+          statusEl.textContent = "No items found in receipt.";
+          return;
+        }
+
+        // Show table
+        let tableHTML = `
+          <h3>Found ${items.length} items:</h3>
+          <table>
+            <tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
+        `;
+        items.forEach(item => {
+          tableHTML += `
+            <tr>
+              <td>${item.item_name || ''}</td>
+              <td>${item.quantity || ''}</td>
+              <td>${item.unit_price ? 'R' + item.unit_price.toFixed(2) : ''}</td>
+              <td>${item.total_price ? 'R' + item.total_price.toFixed(2) : ''}</td>
+            </tr>
+          `;
+        });
+        tableHTML += "</table>";
+
+        // CSV download button
+        const csvContent = "item_name,quantity,unit_price,total_price\n" +
+          items.map(item => 
+            `"${item.item_name || ''}",${item.quantity || ''},${item.unit_price || ''},${item.total_price || ''}`
+          ).join("\n");
+        const csvBlob = new Blob([csvContent], { type: 'text/csv' });
+        const csvUrl = URL.createObjectURL(csvBlob);
+        tableHTML += `<br><a href="${csvUrl}" download="receipt_items.csv" style="background:#28a745;color:white;padding:10px 20px;text-decoration:none;">📥 Download CSV</a>`;
+
+        tableContainer.innerHTML = tableHTML;
+        tableContainer.style.display = "block";
+        statusEl.textContent = `✅ Success: ${items.length} items extracted!`;
 
       } catch (err) {
         console.error(err);
-        resultEl.innerText = "Error processing video.";
+        statusEl.textContent = `❌ Error: ${err.message} (Cold start can take 30-90s)`;
+      } finally {
+        processBtn.disabled = false;
+        processBtn.textContent = "Process Video";
+        progressContainer.style.display = "none";
+        progressBar.style.width = "0%";
       }
     }
   </script>
