@@ -1,117 +1,222 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
   <meta charset="UTF-8">
-  <title>Receipt OCR → Items Table + CSV</title>
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Receipt Video OCR</title>
   <style>
-    body { font-family: Arial; max-width: 800px; margin: 50px auto; }
-    table { border-collapse: collapse; width: 100%; margin-top: 20px; }
-    th, td { border: 1px solid #ddd; padding: 8px; text-align: left; }
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 900px;
+      margin: 40px auto;
+      padding: 20px;
+    }
+    h2 { color: #333; }
+    input[type="file"], button {
+      margin: 10px 0;
+      padding: 10px;
+    }
+    button {
+      background: #007cba;
+      color: white;
+      border: none;
+      cursor: pointer;
+      padding: 12px 24px;
+      border-radius: 4px;
+    }
+    button:disabled { background: #aaa; cursor: not-allowed; }
+    #progress-container { margin: 15px 0; display: none; }
+    #progress {
+      width: 100%;
+      height: 20px;
+      background: #eee;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #4caf50;
+      transition: width 0.4s;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin-top: 20px;
+    }
+    th, td {
+      border: 1px solid #ddd;
+      padding: 10px;
+      text-align: left;
+    }
     th { background: #f4f4f4; }
-    #progress { width: 100%; height: 20px; background: #eee; }
-    #progress-bar { height: 100%; background: #4caf50; width: 0%; transition: width 0.3s; }
-    button { padding: 10px 20px; background: #007cba; color: white; border: none; cursor: pointer; }
-    button:disabled { background: #ccc; cursor: not-allowed; }
+    #status { font-weight: bold; color: #555; }
+    .error { color: red; }
+    .success { color: green; }
   </style>
 </head>
 <body>
   <h2>Receipt Video → Items Table + CSV Download</h2>
+
   <input type="file" id="video" accept="video/*">
+  <br>
+  <button id="warmupBtn" onclick="warmUp()">Warm Up API (recommended first)</button>
   <button id="processBtn" onclick="uploadVideo()">Process Video</button>
-  <div id="progress-container" style="display:none;">
+
+  <div id="progress-container">
     <div>Upload Progress: <span id="progress-text">0%</span></div>
     <div id="progress"><div id="progress-bar"></div></div>
   </div>
-  <pre id="status">Select video and click Process</pre>
+
+  <p id="status">Select a video (max 60s recommended) and click Process</p>
+
   <div id="table-container" style="display:none;"></div>
 
   <script>
+    const CLOUD_RUN_URL = "https://receipt-parser-api-107335377039.europe-west1.run.app";
+
+    async function warmUp() {
+      const status = document.getElementById("status");
+      status.textContent = "Warming up API...";
+      status.className = "";
+      try {
+        const res = await fetch(`${CLOUD_RUN_URL}/health`);
+        if (res.ok) {
+          status.textContent = "API is ready! Now upload your video.";
+          status.className = "success";
+        } else {
+          throw new Error("Health check failed");
+        }
+      } catch (err) {
+        status.textContent = "Warm-up failed. Try processing anyway.";
+        status.className = "error";
+      }
+    }
+
     async function uploadVideo() {
       const videoInput = document.getElementById("video");
       const processBtn = document.getElementById("processBtn");
-      const statusEl = document.getElementById("status");
+      const status = document.getElementById("status");
       const progressContainer = document.getElementById("progress-container");
       const progressBar = document.getElementById("progress-bar");
       const progressText = document.getElementById("progress-text");
       const tableContainer = document.getElementById("table-container");
 
       if (!videoInput.files.length) {
-        alert("Select a video first (max 60s).");
+        alert("Please select a video file first (max 60s recommended).");
         return;
       }
 
       const file = videoInput.files[0];
       const formData = new FormData();
-      formData.append("file", file);  // Fixed: "file" not "video"
+      formData.append("file", file);  // ← correct field name
 
-      // UI updates
+      // Reset UI
       processBtn.disabled = true;
       processBtn.textContent = "Processing...";
+      status.textContent = "Uploading & processing... (first run can take 60–180s)";
+      status.className = "";
       progressContainer.style.display = "block";
-      statusEl.textContent = "Uploading video...";
+      progressBar.style.width = "0%";
+      progressText.textContent = "0%";
       tableContainer.style.display = "none";
+      tableContainer.innerHTML = "";
 
       try {
-        const CLOUD_RUN_URL = "https://receipt-parser-api-107335377039.europe-west1.run.app";
+        // Simulate upload progress (real progress is hard with fetch alone)
+        let progress = 0;
+        const progressInterval = setInterval(() => {
+          progress += 10;
+          if (progress <= 90) {
+            progressBar.style.width = progress + "%";
+            progressText.textContent = progress + "%";
+          }
+        }, 1500);
+
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
+
         const response = await fetch(`${CLOUD_RUN_URL}/parse-receipt`, {
           method: "POST",
-          body: formData
+          body: formData,
+          signal: controller.signal
         });
 
-        // Update upload progress (upload complete when response starts)
+        clearTimeout(timeoutId);
+        clearInterval(progressInterval);
         progressBar.style.width = "100%";
-        progressText.textContent = "100% - Processing with AI...";
+        progressText.textContent = "100%";
 
         if (!response.ok) {
-          const err = await response.json();
-          throw new Error(err.detail || `HTTP ${response.status}`);
+          const errData = await response.json();
+          throw new Error(errData.detail || `Server error (${response.status})`);
         }
 
         const items = await response.json();
+
         if (!items || items.length === 0) {
-          statusEl.textContent = "No items found in receipt.";
+          status.textContent = "No items found in the receipt.";
+          status.className = "";
           return;
         }
 
-        // Show table
-        let tableHTML = `
-          <h3>Found ${items.length} items:</h3>
+        // Build table
+        let html = `<h3>Found ${items.length} items:</h3>
           <table>
-            <tr><th>Item</th><th>Qty</th><th>Unit Price</th><th>Total</th></tr>
-        `;
-        items.forEach(item => {
-          tableHTML += `
             <tr>
-              <td>${item.item_name || ''}</td>
-              <td>${item.quantity || ''}</td>
-              <td>${item.unit_price ? 'R' + item.unit_price.toFixed(2) : ''}</td>
-              <td>${item.total_price ? 'R' + item.total_price.toFixed(2) : ''}</td>
-            </tr>
-          `;
+              <th>Item Name</th>
+              <th>Quantity</th>
+              <th>Unit Price</th>
+              <th>Total Price</th>
+            </tr>`;
+
+        items.forEach(item => {
+          html += `
+            <tr>
+              <td>${item.item_name || '-'}</td>
+              <td>${item.quantity ?? '-'}</td>
+              <td>${item.unit_price ? 'R' + Number(item.unit_price).toFixed(2) : '-'}</td>
+              <td>${item.total_price ? 'R' + Number(item.total_price).toFixed(2) : '-'}</td>
+            </tr>`;
         });
-        tableHTML += "</table>";
 
-        // CSV download button
-        const csvContent = "item_name,quantity,unit_price,total_price\n" +
-          items.map(item => 
-            `"${item.item_name || ''}",${item.quantity || ''},${item.unit_price || ''},${item.total_price || ''}`
-          ).join("\n");
-        const csvBlob = new Blob([csvContent], { type: 'text/csv' });
-        const csvUrl = URL.createObjectURL(csvBlob);
-        tableHTML += `<br><a href="${csvUrl}" download="receipt_items.csv" style="background:#28a745;color:white;padding:10px 20px;text-decoration:none;">📥 Download CSV</a>`;
+        html += `</table>`;
 
-        tableContainer.innerHTML = tableHTML;
+        // CSV download
+        const csvRows = ["item_name,quantity,unit_price,total_price"];
+        items.forEach(item => {
+          csvRows.push(
+            `"${(item.item_name || '').replace(/"/g, '""')}",` +
+            `${item.quantity ?? ''},` +
+            `${item.unit_price ?? ''},` +
+            `${item.total_price ?? ''}`
+          );
+        });
+        const csvContent = csvRows.join("\n");
+        const blob = new Blob([csvContent], { type: "text/csv" });
+        const url = URL.createObjectURL(blob);
+
+        html += `<br><a href="${url}" download="receipt_items.csv" style="display:inline-block; margin-top:15px; padding:12px 24px; background:#28a745; color:white; text-decoration:none; border-radius:4px;">
+          📥 Download CSV
+        </a>`;
+
+        tableContainer.innerHTML = html;
         tableContainer.style.display = "block";
-        statusEl.textContent = `✅ Success: ${items.length} items extracted!`;
+        status.textContent = `Success: ${items.length} items extracted`;
+        status.className = "success";
 
       } catch (err) {
+        progressContainer.style.display = "none";
+        if (err.name === "AbortError") {
+          status.textContent = "Request timed out (processing may still be running). Try again or use a shorter video.";
+        } else {
+          status.textContent = "Error: " + (err.message || "Unknown error");
+        }
+        status.className = "error";
         console.error(err);
-        statusEl.textContent = `❌ Error: ${err.message} (Cold start can take 30-90s)`;
       } finally {
         processBtn.disabled = false;
         processBtn.textContent = "Process Video";
-        progressContainer.style.display = "none";
-        progressBar.style.width = "0%";
       }
     }
   </script>
