@@ -67,6 +67,12 @@
     .error { color: red; }
     .success { color: green; }
     #table-container { margin-top: 20px; }
+    .total-amount {
+      font-size: 1.2em;
+      font-weight: bold;
+      color: #2e7d32;
+      margin: 15px 0;
+    }
   </style>
 </head>
 <body>
@@ -138,7 +144,7 @@
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 600000); // 5 minutes
+        const timeoutId = setTimeout(() => controller.abort(), 300000); // 5 minutes
 
         let progress = 0;
         const progressInterval = setInterval(() => {
@@ -172,7 +178,14 @@
           return;
         }
 
+        // Calculate total
+        const total = items.reduce((sum, item) => {
+          const price = Number(item.total_price) || 0;
+          return sum + price;
+        }, 0).toFixed(2);
+
         let html = `<h3>Found ${items.length} items:</h3>
+          <div class="total-amount">Total Amount: R${total}</div>
           <table>
             <tr>
               <th>Item Name</th>
