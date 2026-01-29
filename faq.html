@@ -1,0 +1,75 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>FAQ – Receipt Video OCR Tool</title>
+  <style>
+    body { font-family: Arial, sans-serif; max-width: 1100px; margin: 40px auto; padding: 20px; line-height: 1.6; color: #333; }
+    header { text-align: center; margin-bottom: 30px; }
+    nav { text-align: center; margin: 20px 0; font-weight: bold; }
+    nav a { margin: 0 15px; color: #007cba; text-decoration: none; }
+    nav a:hover { text-decoration: underline; }
+    h1, h2 { color: #2c3e50; }
+    details { margin: 16px 0; border-bottom: 1px solid #ddd; padding-bottom: 12px; }
+    summary { cursor: pointer; font-weight: bold; }
+    footer { margin-top: 60px; text-align: center; font-size: 0.9em; color: #777; }
+  </style>
+</head>
+<body>
+
+  <header>
+    <h1>Frequently Asked Questions</h1>
+  </header>
+
+  <nav>
+    <a href="index.html">Home</a>
+    <a href="about.html">About</a>
+    <a href="privacy.html">Privacy Policy</a>
+    <a href="terms.html">Terms of Service</a>
+    <a href="faq.html">FAQ</a>
+    <a href="tips.html">Tips & Tricks</a>
+  </nav>
+
+  <main>
+    <details>
+      <summary>Why does the first process take so long?</summary>
+      <p>The server uses a "serverless" setup (Google Cloud Run). The first request after inactivity causes a cold start which can take 60–180 seconds. Use the "Warm Up API" button first to avoid this delay.</p>
+    </details>
+
+    <details>
+      <summary>Which stores/receipts work best?</summary>
+      <p>Most major South African chains (Pick n Pay, Checkers, Shoprite, Woolworths, Clicks, Dis-Chem, Spar, Boxer) work reasonably well. Thermal receipts and very small font can be more challenging.</p>
+    </details>
+
+    <details>
+      <summary>Can it read handwritten receipts?</summary>
+      <p>Handwritten text is currently not reliably supported. The tool works best with printed retail receipts.</p>
+    </details>
+
+    <details>
+      <summary>Does it extract every single line?</summary>
+      <p>It tries to, but may miss or misread lines if the video quality is poor, lighting is bad, or text is very small/blurry. Barcodes are only extracted when clearly visible.</p>
+    </details>
+
+    <details>
+      <summary>Is my data safe?</summary>
+      <p>Videos are processed temporarily and deleted shortly after. We do not store your receipts or use them for training. See our <a href="privacy.html">Privacy Policy</a> for details.</p>
+    </details>
+
+    <details>
+      <summary>Can I use this for business / many receipts?</summary>
+      <p>Yes — but keep in mind this is currently a free hobby project with no guaranteed uptime or bulk processing support.</p>
+    </details>
+  </main>
+
+  <footer>
+    <p>© 2026 Receipt Video OCR Tool •
+      <a href="privacy.html">Privacy Policy</a> •
+      <a href="terms.html">Terms</a> •
+      <a href="about.html">About</a>
+    </p>
+  </footer>
+
+</body>
+</html>
