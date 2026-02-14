@@ -142,7 +142,8 @@
     <p>Upload up to 5 short videos of South African retail receipts and extract items, quantities, prices, totals, and barcodes. Choose to merge into one big table or show separate tables for each video.</p>
   </header>
   <nav>
-    <a href="index.html">Home</a>
+    <a href="#home">Home</a>
+    <a href="index.html">Single Video Mode</a>  <!-- Link back to index.html -->
     <a href="#" onclick="showModal('aboutModal')">About</a>
     <a href="#" onclick="showModal('privacyModal')">Privacy Policy</a>
     <a href="#" onclick="showModal('termsModal')">Terms of Service</a>
@@ -312,7 +313,7 @@
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 1200000);  // 10 min timeout
+        const timeoutId = setTimeout(() => controller.abort(), 900000);  // 15 min timeout
 
         progressInterval = setInterval(() => {
           let progress = parseInt(progressBar.style.width) || 0;
@@ -326,6 +327,8 @@
         const allResults = [];
 
         for (let i = 0; i < videos.length; i++) {
+          status.textContent = `Processing video ${i+1}/${videos.length}...`;
+
           const formData = new FormData();
           formData.append("file", videos[i].files[0]);
 
@@ -341,6 +344,7 @@
           }
 
           const items = await response.json();
+          console.log(`Parsed items from video ${i+1}:`, items);
           allResults.push(items);
         }
 
@@ -350,15 +354,10 @@
         progressBar.style.width = "100%";
         progressText.textContent = "100%";
 
-        // Debug logs
-        console.log("All parsed results:", allResults);
-        console.log("Total clips processed:", allResults.length);
-
         if (merge) {
-          // Merge all items and dedup by barcode (similar to backend)
+          // Step 1: Barcode-based dedup (exact)
           let mergedItems = [];
           let seenBarcodes = new Set();
-
           allResults.flat().forEach(item => {
             const barcode = item.barcode;
             if (barcode && !seenBarcodes.has(barcode)) {
@@ -369,7 +368,44 @@
             }
           });
 
-          renderTable(mergedItems, "Merged Results", resultsContainer);
+          // Step 2: Sort by item_name (case-insensitive)
+          mergedItems.sort((a, b) => {
+            const nameA = (a.item_name || '').toLowerCase().trim();
+            const nameB = (b.item_name || '').toLowerCase().trim();
+            return nameA.localeCompare(nameB);
+          });
+
+          // Step 3: Name-based dedup on sorted list with last 5 barcode digits confirmation
+          let finalItems = [];
+          let i = 0;
+          while (i < mergedItems.length) {
+            finalItems.push(mergedItems[i]);
+            let j = i + 1;
+            while (j < mergedItems.length) {
+              const prevName = (mergedItems[i].item_name || '').toLowerCase().trim().replace(/[^\w\s]/g, '');
+              const currName = (mergedItems[j].item_name || '').toLowerCase().trim().replace(/[^\w\s]/g, '');
+              if (prevName !== currName) {
+                break;
+              }
+
+              const bc1 = (mergedItems[i].barcode || '').toString().replace(/[^\d]/g, '').slice(-5);
+              const bc2 = (mergedItems[j].barcode || '').toString().replace(/[^\d]/g, '').slice(-5);
+              if (bc1 && bc2 && bc1 === bc2) {
+                console.log(`Dropped duplicate: ${mergedItems[j].item_name} (matching last 5 barcode digits: ${bc2})`);
+                j++;  // Skip this duplicate
+              } else {
+                break;  // Not confirmed, stop skipping
+              }
+            }
+            i = j;
+          }
+
+          renderTable(finalItems, "Merged Results", resultsContainer);
+
+          const originalCount = allResults.flat().length;
+          if (finalItems.length < originalCount) {
+            status.textContent += ` (removed ${originalCount - finalItems.length} duplicates)`;
+          }
         } else {
           allResults.forEach((items, index) => {
             renderTable(items, `Video ${index + 1} Results`, resultsContainer);
@@ -384,7 +420,7 @@
         progressContainer.style.display = "none";
 
         if (err.name === "AbortError") {
-          status.textContent = "Processing timed out (10 min). Try fewer/shorter videos or warm up again.";
+          status.textContent = "Processing timed out (15 min). Try fewer videos, shorter clips, or warm up again.";
         } else {
           status.textContent = "Error: " + (err.message || "Unknown error");
         }
