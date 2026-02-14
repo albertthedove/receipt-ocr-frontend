@@ -97,13 +97,6 @@
       color: #2e7d32;
       margin: 20px 0;
     }
-    .policy-section {
-      margin: 40px 0;
-      padding: 20px;
-      background: #f9f9f9;
-      border: 1px solid #eee;
-      border-radius: 6px;
-    }
     footer {
       margin-top: 60px;
       text-align: center;
@@ -178,6 +171,7 @@
       <li>First process after warm-up may take 60–180 seconds (cold start delay)</li>
     </ul>
   </main>
+
   <!-- Privacy Policy Modal -->
   <div id="privacyModal" class="modal">
     <div class="modal-content">
@@ -195,6 +189,7 @@
       <p>Contact us via the About section if you have questions.</p>
     </div>
   </div>
+
   <!-- About Modal -->
   <div id="aboutModal" class="modal">
     <div class="modal-content">
@@ -206,6 +201,7 @@
       <p>Email: [your-email@example.com]</p>
     </div>
   </div>
+
   <!-- Terms of Service Modal -->
   <div id="termsModal" class="modal">
     <div class="modal-content">
@@ -222,9 +218,15 @@
       <p>We may update or discontinue the service at any time.</p>
     </div>
   </div>
+
   <footer>
-    <p>© 2026 Receipt Video OCR Tool • <a href="#" onclick="showModal('privacyModal')">Privacy Policy</a> • <a href="#" onclick="showModal('termsModal')">Terms</a> • <a href="#" onclick="showModal('aboutModal')">About</a></p>
+    <p>© 2026 Receipt Video OCR Tool • 
+      <a href="#" onclick="showModal('privacyModal')">Privacy Policy</a> • 
+      <a href="#" onclick="showModal('termsModal')">Terms</a> • 
+      <a href="#" onclick="showModal('aboutModal')">About</a>
+    </p>
   </footer>
+
   <script>
     // Modal controls
     function showModal(id) {
@@ -238,10 +240,12 @@
         event.target.style.display = "none";
       }
     }
+
     // ──────────────────────────────────────────────
-    // Your processing logic (with barcode support preserved)
+    // Processing logic
     // ──────────────────────────────────────────────
     const CLOUD_RUN_URL = "https://receipt-parser-api-107335377039.europe-west1.run.app";
+
     async function warmUp() {
       const status = document.getElementById("status");
       status.textContent = "Warming up API...";
@@ -259,6 +263,7 @@
         status.className = "error";
       }
     }
+
     async function uploadVideo() {
       const videoInput = document.getElementById("video");
       const processBtn = document.getElementById("processBtn");
@@ -267,13 +272,16 @@
       const progressBar = document.getElementById("progress-bar");
       const progressText = document.getElementById("progress-text");
       const tableContainer = document.getElementById("table-container");
+
       if (!videoInput.files.length) {
         alert("Please select a video file first (max 60s recommended).");
         return;
       }
+
       const file = videoInput.files[0];
       const formData = new FormData();
       formData.append("file", file);
+
       processBtn.disabled = true;
       processBtn.textContent = "Processing...";
       status.textContent = "Uploading & processing receipt... First run can take 60–180s. Please wait.";
@@ -283,99 +291,132 @@
       progressText.textContent = "0%";
       tableContainer.style.display = "none";
       tableContainer.innerHTML = "";
+
+      let progressInterval;  // declared here so catch can access it
+
       try {
         const controller = new AbortController();
         const timeoutId = setTimeout(() => controller.abort(), 300000);
-        let progress = 0;
-        const progressInterval = setInterval(() => {
+
+        progressInterval = setInterval(() => {
+          let progress = parseInt(progressBar.style.width) || 0;
           progress += 5;
           if (progress <= 90) {
             progressBar.style.width = progress + "%";
             progressText.textContent = progress + "%";
           }
         }, 1500);
+
         const response = await fetch(`${CLOUD_RUN_URL}/parse-receipt`, {
           method: "POST",
           body: formData,
           signal: controller.signal
         });
+
         clearTimeout(timeoutId);
-        clearInterval(progressInterval);
+        if (progressInterval) clearInterval(progressInterval);
+
         progressBar.style.width = "100%";
         progressText.textContent = "100%";
+
         if (!response.ok) {
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.detail || `Server error (${response.status})`);
         }
+
         const items = await response.json();
-        if (!items || items.length === 0) {
+
+        // Debug logs
+        console.log("Parsed items from API:", items);
+        console.log("Items count:", items?.length ?? "not an array");
+        if (items && items.length > 0) {
+          console.log("First item:", items[0]);
+        }
+
+        if (!items || !Array.isArray(items) || items.length === 0) {
           status.textContent = "No items could be extracted from the receipt.";
           status.className = "error";
           return;
         }
-        console.log('Response items:', items);
-        console.log('Items length:', items?.length);
-        console.log('First few items:', items.slice(0, 3));
 
+        // Safe rendering block
+        try {
+          const total = items.reduce((sum, item) => {
+            const price = Number(item.total_price) || 0;
+            return sum + price;
+          }, 0).toFixed(2);
 
+          let html = `<h3>Extracted ${items.length} items:</h3>
+            <div class="total-amount">Grand Total: R${total}</div>
+            <table>
+              <tr>
+                <th>Item Name</th>
+                <th>Qty</th>
+                <th>Unit Price</th>
+                <th>Total Price</th>
+                <th>Barcode</th>
+              </tr>`;
 
+          items.forEach(item => {
+            const name = item.item_name || '—';
+            const qty = item.quantity != null ? item.quantity : '—';
+            const unit = item.unit_price != null ? 'R' + Number(item.unit_price).toFixed(2) : '—';
+            const totalPrice = item.total_price != null ? 'R' + Number(item.total_price).toFixed(2) : '—';
+            const barcode = item.barcode != null ? item.barcode : '—';
 
-        
-        const total = items.reduce((sum, item) => {
-          const price = Number(item.total_price) || 0;
-          return sum + price;
-        }, 0).toFixed(2);
-        let html = `<h3>Extracted ${items.length} items:</h3>
-          <div class="total-amount">Grand Total: R${total}</div>
-          <table>
-            <tr>
-              <th>Item Name</th>
-              <th>Qty</th>
-              <th>Unit Price</th>
-              <th>Total Price</th>
-              <th>Barcode</th>
-            </tr>`;
-        items.forEach(item => {
-          html += `
-            <tr>
-              <td>${item.item_name || '—'}</td>
-              <td>${item.quantity ?? '—'}</td>
-              <td>${item.unit_price ? 'R' + Number(item.unit_price).toFixed(2) : '—'}</td>
-              <td>${item.total_price ? 'R' + Number(item.total_price).toFixed(2) : '—'}</td>
-              <td class="barcode-col">${item.barcode || '—'}</td>
-            </tr>`;
-        });
-        html += `</table>`;
-        const csvRows = ["item_name,quantity,unit_price,total_price,barcode"];
-        items.forEach(item => {
-          csvRows.push(
-            `"${(item.item_name || '').replace(/"/g, '""')}",` +
-            `${item.quantity ?? ''},` +
-            `${item.unit_price ?? ''},` +
-            `${item.total_price ?? ''},` +
-            `"${(item.barcode || '').replace(/"/g, '""')}"`
-          );
-        });
-        const csvBlob = new Blob([csvRows.join("\n")], { type: "text/csv" });
-        const csvUrl = URL.createObjectURL(csvBlob);
-        html += `<br><br>
-          <a href="${csvUrl}" download="receipt_items_with_barcodes.csv" style="display:inline-block; padding:14px 28px; background:#27ae60; color:white; text-decoration:none; border-radius:6px; font-weight:bold;">
-            📥 Download CSV (with barcodes)
-          </a>`;
-        tableContainer.innerHTML = html;
-        tableContainer.style.display = "block";
-        status.textContent = `Success — ${items.length} items extracted (barcodes included where detected)`;
-        status.className = "success";
+            html += `
+              <tr>
+                <td>${name}</td>
+                <td>${qty}</td>
+                <td>${unit}</td>
+                <td>${totalPrice}</td>
+                <td class="barcode-col">${barcode}</td>
+              </tr>`;
+          });
+
+          html += `</table>`;
+
+          // CSV
+          const csvRows = ["item_name,quantity,unit_price,total_price,barcode"];
+          items.forEach(item => {
+            const esc = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
+            csvRows.push(
+              `${esc(item.item_name)},${item.quantity ?? ''},${item.unit_price ?? ''},${item.total_price ?? ''},${esc(item.barcode)}`
+            );
+          });
+
+          const csvBlob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+          const csvUrl = URL.createObjectURL(csvBlob);
+
+          html += `<br><br>
+            <a href="${csvUrl}" download="receipt_items_with_barcodes.csv" style="display:inline-block; padding:14px 28px; background:#27ae60; color:white; text-decoration:none; border-radius:6px; font-weight:bold;">
+              📥 Download CSV (with barcodes)
+            </a>`;
+
+          tableContainer.innerHTML = html;
+          tableContainer.style.display = "block";
+
+          status.textContent = `Success — ${items.length} items extracted (barcodes included where detected)`;
+          status.className = "success";
+
+        } catch (renderError) {
+          console.error("Error during table rendering:", renderError);
+          status.textContent = "Received items, but failed to display table. Check browser console.";
+          status.className = "error";
+        }
+
       } catch (err) {
-        clearInterval(progressInterval);
+        if (progressInterval) clearInterval(progressInterval);
         progressContainer.style.display = "none";
+
         if (err.name === "AbortError") {
           status.textContent = "Processing timed out (5 min). Try shorter video or warm up again.";
         } else {
           status.textContent = "Error: " + (err.message || "Unknown error");
         }
         status.className = "error";
-        console.error(err);
+        console.error("Upload/processing error:", err);
+
       } finally {
         processBtn.disabled = false;
         processBtn.textContent = "Process Video";
