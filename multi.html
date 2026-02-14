@@ -1,0 +1,467 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Multi-Receipt Video OCR – Extract from Multiple Videos</title>
+  <meta name="description" content="Free online tool: Upload up to 5 short receipt videos and extract item names, quantities, prices, totals and barcodes into merged or separate tables + CSV using AI OCR. Perfect for South African shoppers with long receipts split into clips.">
+  <style>
+    body {
+      font-family: Arial, sans-serif;
+      max-width: 1100px;
+      margin: 40px auto;
+      padding: 20px;
+      line-height: 1.6;
+      color: #333;
+    }
+    header {
+      text-align: center;
+      margin-bottom: 30px;
+    }
+    nav {
+      text-align: center;
+      margin: 20px 0;
+      font-weight: bold;
+    }
+    nav a {
+      margin: 0 15px;
+      color: #007cba;
+      text-decoration: none;
+    }
+    nav a:hover { text-decoration: underline; }
+    h1, h2 { color: #2c3e50; }
+    h1 { font-size: 2.1em; }
+    input[type="file"], button, label {
+      margin: 12px 0;
+      padding: 12px 20px;
+      font-size: 16px;
+      border-radius: 4px;
+    }
+    button {
+      background: #007cba;
+      color: white;
+      border: none;
+      cursor: pointer;
+    }
+    button:disabled {
+      background: #aaa;
+      cursor: not-allowed;
+    }
+    #progress-container {
+      margin: 20px 0;
+      display: none;
+    }
+    #progress {
+      width: 100%;
+      height: 24px;
+      background: #eee;
+      border-radius: 4px;
+      overflow: hidden;
+    }
+    #progress-bar {
+      height: 100%;
+      width: 0%;
+      background: #27ae60;
+      transition: width 0.5s;
+    }
+    table {
+      width: 100%;
+      border-collapse: collapse;
+      margin: 25px 0;
+      font-size: 0.98em;
+    }
+    th, td {
+      border: 1px solid #d0d0d0;
+      padding: 12px;
+      text-align: left;
+    }
+    th {
+      background: #f8f9fa;
+      white-space: nowrap;
+    }
+    td.barcode-col {
+      font-family: monospace;
+      font-size: 0.95em;
+      color: #444;
+    }
+    #status {
+      font-weight: bold;
+      margin: 20px 0;
+      min-height: 28px;
+    }
+    .error { color: #c0392b; }
+    .success { color: #27ae60; }
+    .total-amount {
+      font-size: 1.4em;
+      font-weight: bold;
+      color: #2e7d32;
+      margin: 20px 0;
+    }
+    footer {
+      margin-top: 60px;
+      text-align: center;
+      font-size: 0.9em;
+      color: #777;
+    }
+    .modal {
+      display: none;
+      position: fixed;
+      inset: 0;
+      background: rgba(0,0,0,0.6);
+      z-index: 1000;
+      justify-content: center;
+      align-items: center;
+    }
+    .modal-content {
+      background: white;
+      max-width: 800px;
+      max-height: 90vh;
+      overflow-y: auto;
+      padding: 30px;
+      border-radius: 8px;
+      margin: 20px;
+    }
+    .close {
+      float: right;
+      font-size: 2em;
+      cursor: pointer;
+      color: #aaa;
+    }
+    .video-input {
+      display: block;
+      margin-bottom: 10px;
+    }
+    .merge-option {
+      margin: 15px 0;
+    }
+  </style>
+</head>
+<body>
+  <header>
+    <h1>Multi-Receipt Video OCR Tool with Barcode Support</h1>
+    <p>Upload up to 5 short videos of South African retail receipts and extract items, quantities, prices, totals, and barcodes. Choose to merge into one big table or show separate tables for each video.</p>
+  </header>
+  <nav>
+    <a href="#home">Home</a>
+    <a href="#" onclick="showModal('aboutModal')">About</a>
+    <a href="#" onclick="showModal('privacyModal')">Privacy Policy</a>
+    <a href="#" onclick="showModal('termsModal')">Terms of Service</a>
+  </nav>
+  <main id="home">
+    <h2>How It Works</h2>
+    <p>This free tool helps digitize multiple paper receipt clips (e.g., long receipts split into 10-second videos). It uses AI to extract:</p>
+    <ul>
+      <li>Item names / descriptions</li>
+      <li>Quantities</li>
+      <li>Unit prices</li>
+      <li>Total line prices</li>
+      <li>Product **barcodes** (EAN-13, UPC, etc. when visible)</li>
+      <li>Grand total (in ZAR – South African Rand)</li>
+    </ul>
+    <p><strong>Best results:</strong> Videos ≤ 10–15 seconds each, steady camera, good lighting. Upload up to 5 clips.</p>
+
+    <div class="video-inputs">
+      <label>Video 1:</label>
+      <input type="file" class="video-file" accept="video/*"><br>
+      <label>Video 2:</label>
+      <input type="file" class="video-file" accept="video/*"><br>
+      <label>Video 3:</label>
+      <input type="file" class="video-file" accept="video/*"><br>
+      <label>Video 4:</label>
+      <input type="file" class="video-file" accept="video/*"><br>
+      <label>Video 5:</label>
+      <input type="file" class="video-file" accept="video/*"><br>
+    </div>
+
+    <div class="merge-option">
+      <input type="radio" id="merge-yes" name="merge" value="yes" checked>
+      <label for="merge-yes">Merge results into one big table</label><br>
+      <input type="radio" id="merge-no" name="merge" value="no">
+      <label for="merge-no">Show separate tables for each video</label>
+    </div>
+
+    <br>
+    <button id="warmupBtn" onclick="warmUp()">Warm Up API (recommended first)</button>
+    <button id="processBtn" onclick="uploadVideos()">Process Videos</button>
+    <div id="progress-container">
+      <div>Upload Progress: <span id="progress-text">0%</span></div>
+      <div id="progress"><div id="progress-bar"></div></div>
+    </div>
+    <p id="status">Select up to 5 short receipt videos and click Process Videos</p>
+    <div id="results-container"></div>
+    <h2>Tips for Accurate Extraction</h2>
+    <ul>
+      <li>Hold receipt flat and steady during recording</li>
+      <li>Use bright, even lighting — avoid shadows/glare</li>
+      <li>Most Pick n Pay, Checkers, Shoprite, Woolworths, Clicks receipts work well</li>
+      <li>Barcodes are extracted when clearly visible in the video frames</li>
+      <li>First process after warm-up may take 60–180 seconds (cold start delay)</li>
+      <li>For long receipts, split into multiple 10-second clips and merge results</li>
+    </ul>
+  </main>
+
+  <!-- Modals (same as original) -->
+  <div id="privacyModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal('privacyModal')">×</span>
+      <h2>Privacy Policy</h2>
+      <p>Last updated: January 2026</p>
+      <p>We are committed to protecting your privacy. This tool processes your uploaded receipt video on our secure server and does not permanently store your video or extracted data.</p>
+      <ul>
+        <li>We do <strong>not</strong> sell, share or use your receipt data for marketing</li>
+        <li>Uploaded videos are processed temporarily and automatically deleted shortly after extraction</li>
+        <li>Barcodes and item data are only used to generate your result — no personal identifiers are extracted or stored</li>
+        <li>We may collect anonymized usage stats (e.g. success rate, file size) to improve the service</li>
+        <li>Hosting & processing via Google Cloud — see <a href="https://cloud.google.com/terms/data-processing-terms" target="_blank" rel="noopener">Google Cloud privacy</a></li>
+      </ul>
+      <p>Contact us via the About section if you have questions.</p>
+    </div>
+  </div>
+  <div id="aboutModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal('aboutModal')">×</span>
+      <h2>About This Tool</h2>
+      <p>A small South African-focused project to help shoppers, businesses and expense trackers digitize long paper receipts from multiple video clips — with barcode extraction for easier product lookup or inventory.</p>
+      <p>Built with Google Cloud Run + custom AI/OCR pipeline.</p>
+      <p>Feedback or suggestions? Reach out:</p>
+      <p>Email: [your-email@example.com]</p>
+    </div>
+  </div>
+  <div id="termsModal" class="modal">
+    <div class="modal-content">
+      <span class="close" onclick="closeModal('termsModal')">×</span>
+      <h2>Terms of Service</h2>
+      <p>By using this tool you agree to:</p>
+      <ul>
+        <li>Use it only for lawful, personal or business purposes</li>
+        <li>Not upload videos with illegal, harmful, or third-party copyrighted content</li>
+        <li>Understand that OCR/AI extraction may have inaccuracies (always verify important data)</li>
+        <li>We provide this service “as is” with no warranty of accuracy or uptime</li>
+        <li>We are not liable for decisions made using the extracted information</li>
+      </ul>
+      <p>We may update or discontinue the service at any time.</p>
+    </div>
+  </div>
+  <footer>
+    <p>© 2026 Multi-Receipt Video OCR Tool • <a href="#" onclick="showModal('privacyModal')">Privacy Policy</a> • <a href="#" onclick="showModal('termsModal')">Terms</a> • <a href="#" onclick="showModal('aboutModal')">About</a></p>
+  </footer>
+  <script>
+    // Modal controls (same as original)
+    function showModal(id) {
+      document.getElementById(id).style.display = "flex";
+    }
+    function closeModal(id) {
+      document.getElementById(id).style.display = "none";
+    }
+    window.onclick = function(event) {
+      if (event.target.classList.contains('modal')) {
+        event.target.style.display = "none";
+      }
+    }
+
+    const CLOUD_RUN_URL = "https://receipt-parser-api-107335377039.europe-west1.run.app";
+
+    async function warmUp() {
+      const status = document.getElementById("status");
+      status.textContent = "Warming up API...";
+      status.className = "";
+      try {
+        const res = await fetch(`${CLOUD_RUN_URL}/health`);
+        if (res.ok) {
+          status.textContent = "API is ready! Now you can upload your receipt videos.";
+          status.className = "success";
+        } else {
+          throw new Error("Health check failed");
+        }
+      } catch (err) {
+        status.textContent = "Warm-up failed. You can still try processing.";
+        status.className = "error";
+      }
+    }
+
+    async function uploadVideos() {
+      const videoInputs = document.querySelectorAll('.video-file');
+      const processBtn = document.getElementById("processBtn");
+      const status = document.getElementById("status");
+      const progressContainer = document.getElementById("progress-container");
+      const progressBar = document.getElementById("progress-bar");
+      const progressText = document.getElementById("progress-text");
+      const resultsContainer = document.getElementById("results-container");
+      const merge = document.querySelector('input[name="merge"]:checked').value === "yes";
+
+      const videos = Array.from(videoInputs).filter(input => input.files.length > 0);
+      if (videos.length === 0) {
+        alert("Please select at least one video file (up to 5, max 10–15s each).");
+        return;
+      }
+      if (videos.length > 5) {
+        alert("Maximum 5 videos allowed.");
+        return;
+      }
+
+      processBtn.disabled = true;
+      processBtn.textContent = "Processing...";
+      status.textContent = `Uploading & processing ${videos.length} videos... First run can take longer. Please wait.`;
+      status.className = "";
+      progressContainer.style.display = "block";
+      progressBar.style.width = "0%";
+      progressText.textContent = "0%";
+      resultsContainer.innerHTML = "";
+
+      let progressInterval;
+
+      try {
+        const controller = new AbortController();
+        const timeoutId = setTimeout(() => controller.abort(), 600000);  // 10 min timeout
+
+        progressInterval = setInterval(() => {
+          let progress = parseInt(progressBar.style.width) || 0;
+          progress += 5;
+          if (progress <= 90) {
+            progressBar.style.width = progress + "%";
+            progressText.textContent = progress + "%";
+          }
+        }, 1500);
+
+        const allResults = [];
+
+        for (let i = 0; i < videos.length; i++) {
+          const formData = new FormData();
+          formData.append("file", videos[i].files[0]);
+
+          const response = await fetch(`${CLOUD_RUN_URL}/parse-receipt`, {
+            method: "POST",
+            body: formData,
+            signal: controller.signal
+          });
+
+          if (!response.ok) {
+            const errData = await response.json().catch(() => ({}));
+            throw new Error(errData.detail || `Server error for video ${i+1} (${response.status})`);
+          }
+
+          const items = await response.json();
+          allResults.push(items);
+        }
+
+        clearTimeout(timeoutId);
+        if (progressInterval) clearInterval(progressInterval);
+
+        progressBar.style.width = "100%";
+        progressText.textContent = "100%";
+
+        // Debug logs
+        console.log("All parsed results:", allResults);
+        console.log("Total clips processed:", allResults.length);
+
+        if (merge) {
+          // Merge all items and dedup by barcode (similar to backend)
+          let mergedItems = [];
+          let seenBarcodes = new Set();
+
+          allResults.flat().forEach(item => {
+            const barcode = item.barcode;
+            if (barcode && !seenBarcodes.has(barcode)) {
+              seenBarcodes.add(barcode);
+              mergedItems.push(item);
+            } else if (barcode === null) {
+              mergedItems.push(item);
+            }
+          });
+
+          renderTable(mergedItems, "Merged Results", resultsContainer);
+        } else {
+          allResults.forEach((items, index) => {
+            renderTable(items, `Video ${index + 1} Results`, resultsContainer);
+          });
+        }
+
+        status.textContent = `Success — Processed ${videos.length} videos`;
+        status.className = "success";
+
+      } catch (err) {
+        if (progressInterval) clearInterval(progressInterval);
+        progressContainer.style.display = "none";
+
+        if (err.name === "AbortError") {
+          status.textContent = "Processing timed out (10 min). Try fewer/shorter videos or warm up again.";
+        } else {
+          status.textContent = "Error: " + (err.message || "Unknown error");
+        }
+        status.className = "error";
+        console.error("Processing error:", err);
+      } finally {
+        processBtn.disabled = false;
+        processBtn.textContent = "Process Videos";
+      }
+    }
+
+    // Helper to render a single table + CSV
+    function renderTable(items, title, container) {
+      if (!items || items.length === 0) {
+        container.innerHTML += `<p>No items extracted for ${title.toLowerCase()}.</p>`;
+        return;
+      }
+
+      try {
+        const total = items.reduce((sum, item) => {
+          const price = Number(item.total_price) || 0;
+          return sum + price;
+        }, 0).toFixed(2);
+
+        let html = `<h3>${title} - Extracted ${items.length} items:</h3>
+          <div class="total-amount">Grand Total: R${total}</div>
+          <table>
+            <tr>
+              <th>Item Name</th>
+              <th>Qty</th>
+              <th>Unit Price</th>
+              <th>Total Price</th>
+              <th>Barcode</th>
+            </tr>`;
+
+        items.forEach(item => {
+          const name = item.item_name || '—';
+          const qty = item.quantity != null ? item.quantity : '—';
+          const unit = item.unit_price != null ? 'R' + Number(item.unit_price).toFixed(2) : '—';
+          const totalPrice = item.total_price != null ? 'R' + Number(item.total_price).toFixed(2) : '—';
+          const barcode = item.barcode != null ? item.barcode : '—';
+
+          html += `
+            <tr>
+              <td>${name}</td>
+              <td>${qty}</td>
+              <td>${unit}</td>
+              <td>${totalPrice}</td>
+              <td class="barcode-col">${barcode}</td>
+            </tr>`;
+        });
+
+        html += `</table>`;
+
+        const csvRows = ["item_name,quantity,unit_price,total_price,barcode"];
+        items.forEach(item => {
+          const esc = (str) => `"${(str || '').toString().replace(/"/g, '""')}"`;
+          csvRows.push(
+            `${esc(item.item_name)},${item.quantity ?? ''},${item.unit_price ?? ''},${item.total_price ?? ''},${esc(item.barcode)}`
+          );
+        });
+
+        const csvBlob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+        const csvUrl = URL.createObjectURL(csvBlob);
+
+        html += `<br><br>
+          <a href="${csvUrl}" download="${title.toLowerCase().replace(/\s/g, '_')}_receipt_items_with_barcodes.csv" style="display:inline-block; padding:14px 28px; background:#27ae60; color:white; text-decoration:none; border-radius:6px; font-weight:bold;">
+            📥 Download CSV for ${title}
+          </a>`;
+
+        container.innerHTML += html;
+
+      } catch (renderError) {
+        console.error("Error rendering table for " + title + ":", renderError);
+        container.innerHTML += `<p>Received items for ${title}, but failed to display. Check console.</p>`;
+      }
+    }
+  </script>
+</body>
+</html>
