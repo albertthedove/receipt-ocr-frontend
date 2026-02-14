@@ -313,6 +313,14 @@
           status.className = "error";
           return;
         }
+        console.log('Response items:', items);
+        console.log('Items length:', items?.length);
+        console.log('First few items:', items.slice(0, 3));
+
+
+
+
+        
         const total = items.reduce((sum, item) => {
           const price = Number(item.total_price) || 0;
           return sum + price;
