@@ -333,82 +333,88 @@
           const errData = await response.json().catch(() => ({}));
           throw new Error(errData.detail || `Server error (${response.status})`);
         }
+const items = await response.json();
 
-        const items = await response.json();
-        if (!items || items.length === 0) {
-          status.textContent = "No items could be extracted from the receipt.";
-          status.className = "error";
-          return;
-        }
+console.log("API Response parsed:", items);                // ← must see this in console
+console.log("Items count:", items?.length ?? "undefined");
+console.log("First item sample:", items[0] ?? "no items");
 
-        const total = items.reduce((sum, item) => {
-          const price = Number(item.total_price) || 0;
-          return sum + price;
-        }, 0).toFixed(2);
+if (!Array.isArray(items) || items.length === 0) {
+  status.textContent = "No items could be extracted (or invalid response format).";
+  status.className = "error";
+  console.error("Response not an array or empty:", items);
+  return;
+}
 
-        let html = `<h3>Extracted ${items.length} items:</h3>
-          <div class="total-amount">Grand Total: R${total}</div>
-          <table>
-            <tr>
-              <th>Item Name</th>
-              <th>Qty</th>
-              <th>Unit Price</th>
-              <th>Total Price</th>
-              <th>Barcode</th>
-            </tr>`;
+try {
+  // Safe total calculation
+  const total = items.reduce((sum, item) => {
+    const price = Number(item.total_price) || 0;  // safe: null/undef → 0, non-number → 0
+    return sum + price;
+  }, 0).toFixed(2);
 
-        items.forEach(item => {
-          html += `
-            <tr>
-              <td>${item.item_name || '—'}</td>
-              <td>${item.quantity ?? '—'}</td>
-              <td>${item.unit_price ? 'R' + Number(item.unit_price).toFixed(2) : '—'}</td>
-              <td>${item.total_price ? 'R' + Number(item.total_price).toFixed(2) : '—'}</td>
-              <td class="barcode-col">${item.barcode || '—'}</td>
-            </tr>`;
-        });
+  let html = `<h3>Extracted ${items.length} items:</h3>
+    <div class="total-amount">Grand Total: R${total}</div>
+    <table>
+      <tr>
+        <th>Item Name</th>
+        <th>Qty</th>
+        <th>Unit Price</th>
+        <th>Total Price</th>
+        <th>Barcode</th>
+      </tr>`;
 
-        html += `</table>`;
+  items.forEach(item => {
+    // Safe defaults for every field
+    const name = item.item_name || '—';
+    const qty = item.quantity != null ? item.quantity : '—';
+    const unit = item.unit_price != null ? 'R' + Number(item.unit_price).toFixed(2) : '—';
+    const totalPrice = item.total_price != null ? 'R' + Number(item.total_price).toFixed(2) : '—';
+    const barcode = item.barcode != null ? item.barcode : '—';  // handles number or string
 
-        const csvRows = ["item_name,quantity,unit_price,total_price,barcode"];
-        items.forEach(item => {
-          csvRows.push(
-            `"${(item.item_name || '').replace(/"/g, '""')}",` +
-            `${item.quantity ?? ''},` +
-            `${item.unit_price ?? ''},` +
-            `${item.total_price ?? ''},` +
-            `"${(item.barcode || '').replace(/"/g, '""')}"`
-          );
-        });
+    html += `
+      <tr>
+        <td>${name}</td>
+        <td>${qty}</td>
+        <td>${unit}</td>
+        <td>${totalPrice}</td>
+        <td class="barcode-col">${barcode}</td>
+      </tr>`;
+  });
 
-        const csvBlob = new Blob([csvRows.join("\n")], { type: "text/csv" });
-        const csvUrl = URL.createObjectURL(csvBlob);
+  html += `</table>`;
 
-        html += `<br><br>
-          <a href="${csvUrl}" download="receipt_items_with_barcodes.csv" style="display:inline-block; padding:14px 28px; background:#27ae60; color:white; text-decoration:none; border-radius:6px; font-weight:bold;">
-            📥 Download CSV (with barcodes)
-          </a>`;
+  // CSV part (add safe escaping)
+  const csvRows = ["item_name,quantity,unit_price,total_price,barcode"];
+  items.forEach(item => {
+    const esc = str => `"${(str || '').toString().replace(/"/g, '""')}"`;
+    csvRows.push(
+      `${esc(item.item_name)},` +
+      `${item.quantity ?? ''},` +
+      `${item.unit_price ?? ''},` +
+      `${item.total_price ?? ''},` +
+      `${esc(item.barcode)}`
+    );
+  });
 
-        tableContainer.innerHTML = html;
-        tableContainer.style.display = "block";
-        status.textContent = `Success — ${items.length} items extracted (barcodes included where detected)`;
-        status.className = "success";
+  const csvBlob = new Blob([csvRows.join("\n")], { type: "text/csv" });
+  const csvUrl = URL.createObjectURL(csvBlob);
+  html += `<br><br>
+    <a href="${csvUrl}" download="receipt_items_with_barcodes.csv" style="...">
+      📥 Download CSV (with barcodes)
+    </a>`;
 
-      } catch (err) {
-        clearInterval(progressInterval);
-        progressContainer.style.display = "none";
-        if (err.name === "AbortError") {
-          status.textContent = "Processing timed out (5 min). Try shorter video or warm up again.";
-        } else {
-          status.textContent = "Error: " + (err.message || "Unknown error");
-        }
-        status.className = "error";
-        console.error(err);
-      } finally {
-        processBtn.disabled = false;
-        processBtn.textContent = "Process Video";
-      }
-    }
+  tableContainer.innerHTML = html;
+  tableContainer.style.display = "block";
+
+  status.textContent = `Success — ${items.length} items extracted (barcodes included where detected)`;
+  status.className = "success";
+
+} catch (renderErr) {
+  console.error("Rendering failed:", renderErr);
+  status.textContent = `Items received (${items.length}), but display failed — check console.`;
+  status.className = "error";
+}
   </script>
 </body>
 </html>
