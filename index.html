@@ -296,7 +296,7 @@
 
       try {
         const controller = new AbortController();
-        const timeoutId = setTimeout(() => controller.abort(), 300000);
+        const timeoutId = setTimeout(() => controller.abort(), 600000);
 
         progressInterval = setInterval(() => {
           let progress = parseInt(progressBar.style.width) || 0;
